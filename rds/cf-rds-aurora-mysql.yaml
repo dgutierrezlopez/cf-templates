@@ -1,0 +1,643 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'State: RDS Aurora, a cexcloud.everis template'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'Network Parameters'
+      Parameters:
+      - VPCID
+      - SHAREDSUBNETSID
+      - DNSZoneInternalID
+      - DNSZoneInternalName
+    - Label:
+          default: "Bastion Configuration"
+      Parameters:
+        - SGBastion
+    - Label:
+          default: "Alert Topic SNS Configuraction"
+      Parameters:
+        - ExistARNAlertTopicSNS
+        - ARNAlertTopicSNS
+    - Label:
+        default: 'Security Parameters'
+      Parameters:
+      - Environment
+      - CostCenter
+      - ServiceName
+      - ProjectName
+    - Label:
+        default: 'RDS Parameters'
+      Parameters:
+      - Engine
+      - DBSnapshotIdentifier
+      - DBInstanceClass
+      - DBName
+      - DBBackupRetentionPeriod
+      - DBMasterUsername
+      - DBMasterUserPassword
+      - PreferredBackupWindow
+      - PreferredMaintenanceWindow
+      - EnableEnhancedMonitoring
+      - AddInstanceReadOnly01
+Parameters:
+  VPCID:
+    Description: VPC-Id
+    Type: AWS::EC2::VPC::Id
+  SHAREDSUBNETSID: 
+    Description: LoadBalancer Subnets-Id
+    Type: List<AWS::EC2::Subnet::Id>
+  DNSZoneInternalID:
+    Description: 'Optional Domain Zone Internal Id ej F1FRJZR9QZWRQK'
+    Type: AWS::Route53::HostedZone::Id
+  DNSZoneInternalName:
+    Description: 'If you have selected a ZoneID as in the previous step, copy the name of the domain you have selected. ex: service.internal'
+    Type: String
+  SGBastion:
+    Description: Security ID instance bastion
+    Type: AWS::EC2::SecurityGroup::Id
+  ExistARNAlertTopicSNS:
+    Description: ¿Esta creado el Topic SNS de alertado?
+    Type: String
+    Default: "No"
+    AllowedValues:
+      - "Yes"
+      - "No"
+  ARNAlertTopicSNS:
+    Description: ARN Alert Topic SNS
+    Type: String
+    Default: ''
+  CostCenter:
+    Description: "Name Cost Center, if not exists, add Service Name"
+    Type: String
+    MinLength: 1
+    MaxLength: 63
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+  ServiceName: 
+    Description: "Name Servicio o Ecosystem"
+    Type: String
+    MinLength: 1
+    MaxLength: 63
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+  ProjectName: 
+    Description: "Name Project"
+    Type: String
+    MinLength: 1
+    MaxLength: 63
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+  Environment:
+    Type: String
+    Description: Entorno
+    Default: dev
+    AllowedValues:
+    - dev
+    - pre
+    - pro
+  Engine:
+    Description: 'Aurora engine and version'
+    Type: String
+    AllowedValues:
+    - '5.6.mysql-aurora.1.19.1' # aws rds describe-db-engine-versions --engine aurora --query 'DBEngineVersions[?contains(SupportedEngineModes,`provisioned`)].EngineVersion'
+    - aurora
+    - '5.7.mysql-aurora.2.04.3' # aws rds describe-db-engine-versions --engine aurora-mysql --query 'DBEngineVersions[?contains(SupportedEngineModes,`provisioned`)].EngineVersion'
+    - '5.7.mysql-aurora.2.03.4'
+    - 'aurora-mysql'
+    - 'aurora-postgresql-10.7' # aws rds describe-db-engine-versions --engine aurora-postgresql --query 'DBEngineVersions[?contains(SupportedEngineModes,`provisioned`)].EngineVersion'
+    - 'aurora-postgresql-10.6'
+    - 'aurora-postgresql-10.5'
+    - 'aurora-postgresql-10.4'
+    - 'aurora-postgresql-9.6.12'
+    - 'aurora-postgresql'
+    Default: aurora
+  DBSnapshotIdentifier:
+    Description: 'Optional identifier for the DB cluster snapshot from which you want to restore (leave blank to create an empty cluster).'
+    Type: String
+    Default: ''
+  DBInstanceClass:
+    Description: 'The instance type of database server (see https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Concepts.DBInstanceClass.html).'
+    Type: String
+    Default: 'db.t2.medium'
+    AllowedValues:
+      - db.t2.micro
+      - db.t2.small
+      - db.t2.medium
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.m4.large
+      - db.m4.xlarge
+      - db.m4.2xlarge
+      - db.m4.4xlarge
+      - db.m4.10xlarge
+      - db.m5.large
+      - db.m5.xlarge
+      - db.m5.2xlarge
+      - db.m5.4xlarge
+      - db.m5.10xlarge
+      - db.r4.large
+      - db.r4.xlarge
+      - db.r4.2xlarge
+      - db.r4.4xlarge
+      - db.r4.8xlarge
+      - db.r4.16xlarge
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r5.8xlarge
+      - db.r5.16xlarge
+  DBName:
+    Description: 'Name of the database (ignored when DBSnapshotIdentifier is set, value used from snapshot).'
+    Type: String
+    Default: ''
+  DBBackupRetentionPeriod:
+    Description: 'The number of days to keep snapshots of the cluster.'
+    Type: Number
+    MinValue: 1
+    MaxValue: 35
+    Default: 30
+  DBMasterUsername:
+    Description: 'The master user name for the DB instance (ignored when DBSnapshotIdentifier is set, value used from snapshot).'
+    Type: 'String'
+    Default: master
+  DBMasterUserPassword:
+    Description: 'The master password for the DB instance (ignored when DBSnapshotIdentifier is set, value used from snapshot).'
+    Type: String
+    NoEcho: true
+    Default: ''
+  PreferredBackupWindow:
+    Description: 'The daily time range in UTC during which you want to create automated backups.'
+    Type: String
+    Default: '09:54-10:24'
+  PreferredMaintenanceWindow:
+    Description: The weekly time range (in UTC) during which system maintenance can occur.
+    Type: String
+    Default: 'sat:07:00-sat:07:30'
+  EnableEnhancedMonitoring:
+    Description: 'Provide metrics in real time for the operating system (OS) that your DB instance runs on.'
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+    Default: false
+  AddInstanceReadOnly01:
+    Description: "Selecciona si debe tener al menos una instancia de lectura."
+    Type: String
+    Default: "No"
+    AllowedValues:
+      - "Yes"
+      - "No"
+Mappings:
+  EngineMap:
+    aurora:
+      Engine: aurora
+      EngineVersion: '5.6.10a'
+      Port: 3306
+      ClusterParameterGroupFamily: 'aurora5.6'
+      ParameterGroupFamily: 'aurora5.6'
+    '5.6.mysql-aurora.1.19.1':
+      Engine: aurora
+      EngineVersion: '5.6.mysql_aurora.1.19.1'
+      Port: 3306
+      ClusterParameterGroupFamily: 'aurora5.6'
+      ParameterGroupFamily: 'aurora5.6'
+    'aurora-mysql':
+      Engine: 'aurora-mysql'
+      EngineVersion: '5.7.12'
+      Port: 3306
+      ClusterParameterGroupFamily: 'aurora-mysql5.7'
+      ParameterGroupFamily: 'aurora-mysql5.7'
+    '5.7.mysql-aurora.2.03.4':
+      Engine: 'aurora-mysql'
+      EngineVersion: '5.7.mysql_aurora.2.03.4'
+      Port: 3306
+      ClusterParameterGroupFamily: 'aurora-mysql5.7'
+      ParameterGroupFamily: 'aurora-mysql5.7'
+    '5.7.mysql-aurora.2.04.3':
+      Engine: 'aurora-mysql'
+      EngineVersion: '5.7.mysql_aurora.2.04.3'
+      Port: 3306
+      ClusterParameterGroupFamily: 'aurora-mysql5.7'
+      ParameterGroupFamily: 'aurora-mysql5.7'
+    'aurora-postgresql':
+      Engine: 'aurora-postgresql'
+      EngineVersion: '9.6.3'
+      Port: 5432
+      ClusterParameterGroupFamily: 'aurora-postgresql9.6'
+      ParameterGroupFamily: 'aurora-postgresql9.6'
+    'aurora-postgresql-9.6.12':
+      Engine: 'aurora-postgresql'
+      EngineVersion: '9.6.12'
+      Port: 5432
+      ClusterParameterGroupFamily: 'aurora-postgresql9.6'
+      ParameterGroupFamily: 'aurora-postgresql9.6'
+    'aurora-postgresql-10.4':
+      Engine: 'aurora-postgresql'
+      EngineVersion: '10.4'
+      Port: 5432
+      ClusterParameterGroupFamily: 'aurora-postgresql10'
+      ParameterGroupFamily: 'aurora-postgresql10'
+    'aurora-postgresql-10.5':
+      Engine: 'aurora-postgresql'
+      EngineVersion: '10.5'
+      Port: 5432
+      ClusterParameterGroupFamily: 'aurora-postgresql10'
+      ParameterGroupFamily: 'aurora-postgresql10'
+    'aurora-postgresql-10.6':
+      Engine: 'aurora-postgresql'
+      EngineVersion: '10.6'
+      Port: 5432
+      ClusterParameterGroupFamily: 'aurora-postgresql10'
+      ParameterGroupFamily: 'aurora-postgresql10'
+    'aurora-postgresql-10.7':
+      Engine: 'aurora-postgresql'
+      EngineVersion: '10.7'
+      Port: 5432
+      ClusterParameterGroupFamily: 'aurora-postgresql10'
+      ParameterGroupFamily: 'aurora-postgresql10'
+Conditions:
+  HasZone: !Not [!Equals [!Ref DNSZoneInternalID, '']]
+  HasAlertTopic: !Equals [!Ref ExistARNAlertTopicSNS, "Yes"]
+  HasDBSnapshotIdentifier: !Not [!Equals [!Ref DBSnapshotIdentifier, '']]
+  HasEngineMySQL: !Or [!Equals [!FindInMap [EngineMap, !Ref Engine, Engine], 'aurora'], !Equals [!FindInMap [EngineMap, !Ref Engine, Engine], 'aurora-mysql']]
+  HasEnhancedMonitoring: !Equals [!Ref EnableEnhancedMonitoring, 'true' ]
+  NoInstallRDSInstanceB: !Equals [!Ref AddInstanceReadOnly01, "Yes"]
+Resources:
+  RecordSet:
+    Condition: HasZone
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      HostedZoneId: !Ref DNSZoneInternalID
+      Name: !Sub "${Environment}rds${ServiceName}${ProjectName}.${DNSZoneInternalName}"
+      ResourceRecords:
+      - !GetAtt 'DBCluster.Endpoint.Address'
+      TTL: '60'
+      Type: CNAME
+  ReadRecordSet:
+    Condition: HasZone
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      HostedZoneId: !Ref DNSZoneInternalID
+      Name: !Sub "read${Environment}rds${ServiceName}${ProjectName}.${DNSZoneInternalName}"
+      ResourceRecords:
+      - !GetAtt 'DBCluster.ReadEndpoint.Address'
+      TTL: '60'
+      Type: CNAME
+  RecordSetDB:
+    Condition: HasZone
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      HostedZoneId: !Ref DNSZoneInternalID
+      Name: !Sub "${Environment}rds${ServiceName}${ProjectName}${DBName}.${DNSZoneInternalName}"
+      ResourceRecords:
+      - !GetAtt 'DBCluster.Endpoint.Address'
+      TTL: '60'
+      Type: CNAME
+  ReadRecordSetDB:
+    Condition: HasZone
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      HostedZoneId: !Ref DNSZoneInternalID
+      Name: !Sub 'read${Environment}rds${ServiceName}${ProjectName}${DBName}.${DNSZoneInternalName}'
+      ResourceRecords:
+      - !GetAtt 'DBCluster.ReadEndpoint.Address'
+      TTL: '60'
+      Type: CNAME
+  SGRDS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "sg_rds-${Environment}-${ServiceName}-${ProjectName}"
+      GroupDescription: !Sub "sg_rds-${Environment}-${ServiceName}-${ProjectName}"
+      VpcId: !Ref VPCID
+      SecurityGroupIngress:
+        -
+          IpProtocol: tcp
+          FromPort: !FindInMap [EngineMap, !Ref Engine, Port]
+          ToPort: !FindInMap [EngineMap, !Ref Engine, Port]
+          SourceSecurityGroupId: !Ref SGBastion
+      Tags:
+        -
+          Key: Name
+          Value: !Sub "sg_rds-${Environment}-${ServiceName}-${ProjectName}"
+  SGRDSIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref SGRDS
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref SGRDS
+  SGRDSDatabase:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "sg_rds-${Environment}-${ServiceName}-${ProjectName}-${DBName}"
+      GroupDescription: !Sub "sg_rds-${Environment}-${ServiceName}-${ProjectName}-${DBName}"
+      VpcId: !Ref VPCID
+      SecurityGroupIngress:
+        -
+          IpProtocol: tcp
+          FromPort: !FindInMap [EngineMap, !Ref Engine, Port]
+          ToPort: !FindInMap [EngineMap, !Ref Engine, Port]
+          SourceSecurityGroupId: !Ref SGBastion
+      Tags:
+        -
+          Key: Name
+          Value: !Sub "sg_rds-${Environment}-${ServiceName}-${ProjectName}-${DBName}"
+  SGRDSDatabaseIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref SGRDSDatabase
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref SGRDSDatabase
+  EnhancedMonitoringRole:
+    Condition: HasEnhancedMonitoring
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: ''
+          Effect: Allow
+          Principal:
+            Service: monitoring.rds.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Path: "/"
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: !Ref 'AWS::StackName'
+      SubnetIds: !Ref SHAREDSUBNETSID
+  DBClusterParameterGroup:
+    Type: 'AWS::RDS::DBClusterParameterGroup'
+    Properties:
+      Description: !Ref 'AWS::StackName'
+      Family: !FindInMap [EngineMap, !Ref Engine, ClusterParameterGroupFamily]
+      Parameters: !If
+      - HasEngineMySQL
+      - character_set_client: utf8
+        character_set_connection: utf8
+        character_set_database: utf8
+        character_set_filesystem: utf8
+        character_set_results: utf8
+        character_set_server: utf8
+        collation_connection: utf8_general_ci
+        collation_server: utf8_general_ci
+      - client_encoding: 'UTF8'
+  DBCluster:
+    DeletionPolicy: Snapshot # default
+    UpdateReplacePolicy: Snapshot
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      BackupRetentionPeriod: !Ref DBBackupRetentionPeriod
+      DatabaseName: !If [HasDBSnapshotIdentifier, !Ref 'AWS::NoValue', !Ref DBName]
+      DBClusterIdentifier: !Sub "${Environment}rds${ServiceName}${ProjectName}"
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Engine: !FindInMap [EngineMap, !Ref Engine, Engine]
+      EngineMode: provisioned
+      EngineVersion: !FindInMap [EngineMap, !Ref Engine, EngineVersion]
+      #KmsKeyId: !If [HasKmsKeyAndNotDBSnapshotIdentifier, {'Fn::ImportValue': !Sub '${ParentKmsKeyStack}-KeyId'}, !Ref 'AWS::NoValue']
+      MasterUsername: !If [HasDBSnapshotIdentifier, !Ref 'AWS::NoValue', !Ref DBMasterUsername]
+      MasterUserPassword: !If [HasDBSnapshotIdentifier, !Ref 'AWS::NoValue', !Ref DBMasterUserPassword]
+      Port: !FindInMap [EngineMap, !Ref Engine, Port]
+      PreferredBackupWindow: !Ref PreferredBackupWindow
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      SnapshotIdentifier: !If [HasDBSnapshotIdentifier, !Ref DBSnapshotIdentifier, !Ref 'AWS::NoValue']
+      #StorageEncrypted: !If [HasDBSnapshotIdentifier, !Ref 'AWS::NoValue', !If [HasKmsKey, true, false]]
+      EnableCloudwatchLogsExports:
+      - audit
+      - general
+      - slowquery
+      - error
+      VpcSecurityGroupIds:
+      - !Ref SGRDS
+      - !Ref SGRDSDatabase
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Service
+          Value: !Ref ServiceName
+        - Key: Project
+          Value: !Ref ProjectName
+  DBParameterGroup:
+    Type: 'AWS::RDS::DBParameterGroup'
+    Properties:
+      Description: !Ref 'AWS::StackName'
+      Family: !FindInMap [EngineMap, !Ref Engine, ParameterGroupFamily]
+      Parameters:
+        log_bin_trust_function_creators: 1
+        innodb_print_all_deadlocks: 1
+        log_warnings: 2
+        max_allowed_packet: 1073741824
+        event_scheduler: 'ON'
+        interactive_timeout: 28800
+  DBInstanceA:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceIdentifier: !Join [ '-', [!Ref DBCluster, 01] ]
+      DBInstanceClass: !Ref DBInstanceClass
+      DBParameterGroupName: !Ref DBParameterGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Engine: !FindInMap [EngineMap, !Ref Engine, Engine]
+      MonitoringInterval: !If [HasEnhancedMonitoring, 60, 0]
+      MonitoringRoleArn: !If [HasEnhancedMonitoring, !GetAtt ['EnhancedMonitoringRole', 'Arn'], !Ref 'AWS::NoValue']
+  DBInstanceB:
+    Type: 'AWS::RDS::DBInstance'
+    Condition: NoInstallRDSInstanceB
+    Properties:
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceIdentifier: !Join [ '-', [!Ref DBCluster, 02] ]
+      DBInstanceClass: !Ref DBInstanceClass
+      DBParameterGroupName: !Ref DBParameterGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Engine: !FindInMap [EngineMap, !Ref Engine, Engine]
+      MonitoringInterval: !If [HasEnhancedMonitoring, 60, 0]
+      MonitoringRoleArn: !If [HasEnhancedMonitoring, !GetAtt ['EnhancedMonitoringRole', 'Arn'], !Ref 'AWS::NoValue']
+  DatabaseACPUUtilizationTooHighAlarm:
+    Condition: HasAlertTopic
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions: 
+      - !Ref ARNAlertTopicSNS
+      AlarmDescription: 'Average database CPU utilization over last 10 minutes too high.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceA
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: 'AWS/RDS'
+      OKActions: 
+      - !Ref ARNAlertTopicSNS
+      Period: 600
+      Statistic: Average
+      Threshold: 80
+  DatabaseBCPUUtilizationTooHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Condition: NoInstallRDSInstanceB
+    Properties:
+      AlarmActions: 
+      - !Ref ARNAlertTopicSNS
+      AlarmDescription: 'Average database CPU utilization over last 10 minutes too high.'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceB
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: 'AWS/RDS'
+      OKActions: 
+      - !Ref ARNAlertTopicSNS
+      Period: 600
+      Statistic: Average
+      Threshold: 80
+  DatabaseACPUCreditBalanceTooLowAlarm:
+    Condition: HasAlertTopic
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions: 
+      - !Ref ARNAlertTopicSNS
+      AlarmDescription: 'Average database CPU credit balance over last 10 minutes too low, expect a significant performance drop soon.'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceA
+      EvaluationPeriods: 1
+      MetricName: CPUCreditBalance
+      Namespace: 'AWS/RDS'
+      OKActions: 
+      - !Ref ARNAlertTopicSNS
+      Period: 600
+      Statistic: Average
+      Threshold: 20
+  DatabaseBCPUCreditBalanceTooLowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Condition: NoInstallRDSInstanceB
+    Properties:
+      AlarmActions: 
+      - !Ref ARNAlertTopicSNS
+      AlarmDescription: 'Average database CPU credit balance over last 10 minutes too low, expect a significant performance drop soon.'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceB
+      EvaluationPeriods: 1
+      MetricName: CPUCreditBalance
+      Namespace: 'AWS/RDS'
+      OKActions: 
+      - !Ref ARNAlertTopicSNS
+      Period: 600
+      Statistic: Average
+      Threshold: 20
+  DatabaseAFreeableMemoryTooLowAlarm:
+    Condition: HasAlertTopic
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmActions: 
+      - !Ref ARNAlertTopicSNS
+      AlarmDescription: 'Average database freeable memory over last 10 minutes too low, performance may suffer.'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceA
+      EvaluationPeriods: 1
+      MetricName: FreeableMemory
+      Namespace: 'AWS/RDS'
+      OKActions: 
+      - !Ref ARNAlertTopicSNS
+      Period: 600
+      Statistic: Average
+      Threshold: 64000000 # 64 Megabyte in Byte
+  DatabaseBFreeableMemoryTooLowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Condition: NoInstallRDSInstanceB
+    Properties:
+      AlarmActions: 
+      - !Ref ARNAlertTopicSNS
+      AlarmDescription: 'Average database freeable memory over last 10 minutes too low, performance may suffer.'
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstanceB
+      EvaluationPeriods: 1
+      MetricName: FreeableMemory
+      Namespace: 'AWS/RDS'
+      OKActions: 
+      - !Ref ARNAlertTopicSNS
+      Period: 600
+      Statistic: Average
+      Threshold: 64000000 # 64 Megabyte in Byte
+  DatabaseClusterEventSubscription:
+    Condition: HasAlertTopic
+    Type: 'AWS::RDS::EventSubscription'
+    Properties:
+      EventCategories:
+      - failover
+      - failure
+      - notification
+      SnsTopicArn: !Ref ARNAlertTopicSNS
+      SourceIds: [!Ref DBCluster]
+      SourceType: 'db-cluster'
+Outputs:
+  StackName:
+    Description: 'Stack name.'
+    Value: !Sub '${AWS::StackName}'
+  ClusterName:
+    Description: 'The name of the cluster.'
+    Value: !Ref DBCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterName'
+  DNSName:
+    Description: 'The connection endpoint for the DB cluster.'
+    Value: !GetAtt 'DBCluster.Endpoint.Address'
+    Export:
+      Name: !Sub '${AWS::StackName}-DNSName'
+  ReadDNSName:
+    Description: 'The reader endpoint for the DB cluster.'
+    Value: !GetAtt 'DBCluster.ReadEndpoint.Address'
+    Export:
+      Name: !Sub '${AWS::StackName}-ReadDNSName'
+  DNSNameCluster:
+    Description: 'The connection endpoint for the DB cluster.'
+    Value: !Sub "${Environment}rds${ServiceName}${ProjectName}.${DNSZoneInternalName}"
+    Export:
+      Name: !Sub '${AWS::StackName}-DNSNameCluster'
+  ReadDNSNameCluster:
+    Description: 'The reader endpoint for the DB cluster.'
+    Value: !Sub "read${Environment}rds${ServiceName}${ProjectName}.${DNSZoneInternalName}"
+    Export:
+      Name: !Sub '${AWS::StackName}-ReadDNSNameCluster'
+  DNSNameDBName:
+    Description: 'The connection endpoint for the DB cluster.'
+    Value: !Sub "${Environment}rds${ServiceName}${ProjectName}${DBName}.${DNSZoneInternalName}"
+    Export:
+      Name: !Sub '${AWS::StackName}-DNSNameDBName'
+  ReadDNSNameDBName:
+    Description: 'The reader endpoint for the DB cluster.'
+    Value: !Sub "read${Environment}rds${ServiceName}${ProjectName}${DBName}.${DNSZoneInternalName}"
+    Export:
+      Name: !Sub '${AWS::StackName}-ReadDNSNameDBName'
+  SecurityGroup:
+    Description: 'Security Group of RDS cluster.'
+    Value: !Ref SGRDSDatabase
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup'
+  SecurityGroupDBName:
+    Description: 'Security Group of RDS cluster.'
+    Value: !Ref SGRDSDatabase
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupDBName'

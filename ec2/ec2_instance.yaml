@@ -1,0 +1,62 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+    Environment:
+      Description: Environment
+      Type: String
+      AllowedValues: [pre, pro]
+      ConstraintDescription: only can be pre or pro
+
+Mappings:
+  RegionMap: 
+    us-east-1:
+      HVM64: ami-0ff8a91507f77f867
+      HVMG2: ami-0a584ac55a7631c0c
+    us-west-1:
+      HVM64: ami-0bdb828fd58c52235
+      HVMG2: ami-066ee5fd4a9ef77f1
+    eu-west-1:
+      HVM64: ami-047bb4163c506cd98
+      HVMG2: ami-0a7c483d527806435
+    ap-northeast-1:
+      HVM64: ami-06cd52961ce9f0d85
+      HVMG2: ami-053cdd503598e4a9d
+    ap-southeast-1:
+      HVM64: ami-08569b978cc4dfa10
+      HVMG2: ami-0be9df32ae9f92309
+  
+  InstanceTypeEnvironment:
+    pro:
+      instanceType: t2.small
+    pre:
+      instanceType: t2.micro
+
+Resources:
+    #Security Group
+    MySecurityGroupSSH:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Allow SSH access in port 22
+        SecurityGroupIngress:
+          - CidrIp: 0.0.0.0/0
+            FromPort: 22
+            IpProtocol: tcp
+            ToPort: 22
+
+    #EC2 Instance
+    MyEc2Instance:
+      Type: AWS::EC2::Instance
+      Properties:
+        AvailabilityZone: us-east-1a 
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", HVM64]
+        InstanceType: !FindInMap [InstanceTypeEnvironment, !Ref 'Environment', instanceType]
+        SecurityGroups: 
+        - !Ref MySecurityGroupSSH
+
+    #Elastic IP
+    MyElasticIP:
+      Type: AWS::EC2::EIP
+      Properties:
+        InstanceId: !Ref MyEc2Instance
+    
